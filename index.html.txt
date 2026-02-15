@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { margin: 0; background: #1a1a1a; color: white; text-align: center; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; background: #222; margin: 0 auto; touch-action: none; }
+        #ui { position: absolute; top: 10px; width: 100%; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2 id="targetColorText">Target: BLUE</h2>
+        <p>Score: <span id="scoreVal">0</span> | Time: <span id="timer">15</span>s</p>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Make the app full screen
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let score = 0;
+        let timeLeft = 15;
+        const colors = ['BLUE', 'RED', 'GREEN', 'YELLOW'];
+        const targetColor = 'BLUE'; // You can randomize this per round
+        let objects = [];
+
+        // Game Loop
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Spawn objects
+            if (Math.random() < 0.05) {
+                objects.push({
+                    x: Math.random() * canvas.width,
+                    y: 0,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    radius: 20,
+                    speed: 3 + (15 - timeLeft) * 0.5 // Speed increases over time
+                });
+            }
+
+            // Draw and Move
+            objects.forEach((obj, index) => {
+                obj.y += obj.speed;
+                ctx.beginPath();
+                ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+                ctx.fillStyle = obj.color.toLowerCase();
+                ctx.fill();
+
+                // Missed correct color penalty
+                if (obj.y > canvas.height) {
+                    if (obj.color === targetColor) score -= 1;
+                    objects.splice(index, 1);
+                }
+            });
+
+            document.getElementById('scoreVal').innerText = score;
+            if (timeLeft > 0) requestAnimationFrame(update);
+        }
+
+        // Tap Detection
+        canvas.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            objects.forEach((obj, index) => {
+                const dist = Math.hypot(touch.clientX - obj.x, touch.clientY - obj.y);
+                if (dist < obj.radius + 10) {
+                    if (obj.color === targetColor) {
+                        score += 1; // Add combo logic here later
+                    } else {
+                        score -= 2;
+                    }
+                    objects.splice(index, 1);
+                }
+            });
+        });
+
+        // Timer
+        const gameTimer = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer').innerText = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(gameTimer);
+                alert("Game Over! Final Score: " + score);
+                // SEND SCORE TO BACKEND HERE
+            }
+        }, 1000);
+
+        update();
+    </script>
+</body>
+</html>
