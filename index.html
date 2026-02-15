@@ -1,97 +1,160 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { margin: 0; background: #1a1a1a; color: white; text-align: center; overflow: hidden; font-family: sans-serif; }
-        canvas { display: block; background: #222; margin: 0 auto; touch-action: none; }
+        body { margin: 0; background: #1a1a1a; color: white; text-align: center; overflow: hidden; font-family: sans-serif; touch-action: none; }
+        canvas { display: block; background: #222; margin: 0 auto; border-bottom: 2px solid #444; }
         #ui { position: absolute; top: 10px; width: 100%; pointer-events: none; }
+        #menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 20px; border-radius: 15px; display: none; pointer-events: auto; }
+        button { background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 18px; cursor: pointer; }
+        .combo-text { color: #ffcc00; font-weight: bold; font-size: 24px; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <h2 id="targetColorText">Target: BLUE</h2>
+        <h2 id="targetText">Target: <span id="colorName" style="color:cyan">BLUE</span></h2>
         <p>Score: <span id="scoreVal">0</span> | Time: <span id="timer">15</span>s</p>
+        <div id="comboDisplay" class="combo-text"></div>
     </div>
+
+    <div id="menu">
+        <h1 id="finalScoreText">Game Over!</h1>
+        <p id="athexEarned">Athex Earned: 0</p>
+        <button onclick="startGame()">Retry Game</button>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand(); // Make the app full screen
+        tg.expand();
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        let score = 0;
-        let timeLeft = 15;
+        let score, timeLeft, objects, combo, gameActive;
         const colors = ['BLUE', 'RED', 'GREEN', 'YELLOW'];
-        const targetColor = 'BLUE'; // You can randomize this per round
-        let objects = [];
+        let targetColor = 'BLUE';
 
-        // Game Loop
+        function startGame() {
+            score = 0;
+            timeLeft = 15;
+            objects = [];
+            combo = 0;
+            gameActive = true;
+            targetColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            document.getElementById('colorName').innerText = targetColor;
+            document.getElementById('colorName').style.color = targetColor.toLowerCase();
+            document.getElementById('menu').style.display = 'none';
+            
+            update();
+            startTimer();
+        }
+
         function update() {
+            if (!gameActive) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Spawn objects
-            if (Math.random() < 0.05) {
+            // Slower Spawn Rate (0.03 instead of 0.05)
+            if (Math.random() < 0.03) {
                 objects.push({
-                    x: Math.random() * canvas.width,
-                    y: 0,
+                    x: Math.random() * (canvas.width - 40) + 20,
+                    y: -20,
                     color: colors[Math.floor(Math.random() * colors.length)],
-                    radius: 20,
-                    speed: 3 + (15 - timeLeft) * 0.5 // Speed increases over time
+                    radius: 25,
+                    speed: 2 + (15 - timeLeft) * 0.3 // Slower acceleration
                 });
             }
 
-            // Draw and Move
             objects.forEach((obj, index) => {
                 obj.y += obj.speed;
+                
+                // Draw circle
                 ctx.beginPath();
                 ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
                 ctx.fillStyle = obj.color.toLowerCase();
                 ctx.fill();
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 2;
+                ctx.stroke();
 
-                // Missed correct color penalty
-                if (obj.y > canvas.height) {
-                    if (obj.color === targetColor) score -= 1;
+                if (obj.y > canvas.height + 30) {
+                    if (obj.color === targetColor) {
+                        score = Math.max(0, score - 1); // Missed penalty
+                        combo = 0; // Reset combo on miss
+                    }
                     objects.splice(index, 1);
                 }
             });
 
             document.getElementById('scoreVal').innerText = score;
-            if (timeLeft > 0) requestAnimationFrame(update);
+            document.getElementById('comboDisplay').innerText = combo >= 5 ? `X${Math.floor(combo/5) + 1} COMBO!` : "";
+            
+            requestAnimationFrame(update);
         }
 
-        // Tap Detection
-        canvas.addEventListener('touchstart', (e) => {
-            const touch = e.touches[0];
+        // Fixed Tap Logic (No Hovering)
+        canvas.addEventListener('touchstart', handleInput);
+        canvas.addEventListener('mousedown', handleInput);
+
+        function handleInput(e) {
+            if (!gameActive) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            let hit = false;
             objects.forEach((obj, index) => {
-                const dist = Math.hypot(touch.clientX - obj.x, touch.clientY - obj.y);
-                if (dist < obj.radius + 10) {
+                const dist = Math.hypot(clientX - obj.x, clientY - obj.y);
+                if (dist < obj.radius + 15) {
+                    hit = true;
                     if (obj.color === targetColor) {
-                        score += 1; // Add combo logic here later
+                        combo++;
+                        let multiplier = 1;
+                        if (combo >= 10) multiplier = 3;
+                        else if (combo >= 5) multiplier = 2;
+                        
+                        score += (1 * multiplier);
+                        objects.splice(index, 1);
                     } else {
-                        score -= 2;
+                        score = Math.max(0, score - 2); // Wrong color penalty
+                        combo = 0;
+                        objects.splice(index, 1);
                     }
-                    objects.splice(index, 1);
                 }
             });
-        });
+        }
 
-        // Timer
-        const gameTimer = setInterval(() => {
-            timeLeft--;
-            document.getElementById('timer').innerText = timeLeft;
-            if (timeLeft <= 0) {
-                clearInterval(gameTimer);
-                alert("Game Over! Final Score: " + score);
-                // SEND SCORE TO BACKEND HERE
-            }
-        }, 1000);
+        function startTimer() {
+            const interval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').innerText = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(interval);
+                    endGame();
+                }
+            }, 1000);
+        }
 
-        update();
+        function endGame() {
+            gameActive = false;
+            document.getElementById('menu').style.display = 'block';
+            document.getElementById('finalScoreText').innerText = "Score: " + score;
+            
+            // Your Athex Logic
+            let reward = 0.0001;
+            if (score >= 30) reward = 0.001;
+            else if (score >= 20) reward = 0.0007;
+            else if (score >= 10) reward = 0.0003;
+            
+            document.getElementById('athexEarned').innerText = "Athex Earned: " + reward;
+        }
+
+        startGame(); // Start immediately on load
     </script>
 </body>
 </html>
