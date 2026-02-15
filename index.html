@@ -4,55 +4,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Professional Gradient Background */
-        body { 
-            margin: 0; 
-            background: radial-gradient(circle, #1e3c72 0%, #2a5298 100%); 
-            color: white; 
-            text-align: center; 
-            overflow: hidden; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            touch-action: none; 
-        }
-        canvas { display: block; margin: 0 auto; cursor: crosshair; }
-        
-        #ui { 
-            position: absolute; top: 10px; width: 100%; pointer-events: none; 
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-
-        #menu { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            background: rgba(0,0,0,0.85); padding: 30px; border-radius: 20px; 
-            display: none; pointer-events: auto; border: 2px solid #0088cc;
-            width: 80%;
-        }
-
-        button { 
-            background: linear-gradient(to bottom, #0088cc, #005580); 
-            color: white; border: none; padding: 15px 30px; 
-            border-radius: 50px; font-size: 20px; font-weight: bold;
-            cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-
-        .combo-text { color: #ffd700; font-size: 28px; font-weight: 900; }
-        .reward-amt { color: #00ffcc; font-size: 32px; display: block; margin: 10px 0; }
+        body { margin: 0; background: radial-gradient(circle, #0f2027, #203a43, #2c5364); color: white; text-align: center; overflow: hidden; font-family: 'Segoe UI', sans-serif; touch-action: none; }
+        canvas { display: block; margin: 0 auto; }
+        #ui { position: absolute; top: 10px; width: 100%; pointer-events: none; }
+        #menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 30px; border-radius: 20px; display: none; pointer-events: auto; border: 1px solid #00ffcc; width: 85%; }
+        button { background: #00ffcc; color: #000; border: none; padding: 15px 30px; border-radius: 50px; font-size: 20px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+        .token-text { color: #00ffcc; font-size: 35px; font-weight: 900; display: block; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <h2 id="targetText">Target: <span id="colorName">LOADING...</span></h2>
-        <div style="font-size: 18px;">Score: <span id="scoreVal">0</span> | Time: <span id="timer">15</span>s</div>
-        <div id="comboDisplay" class="combo-text"></div>
+        <h2>Target: <span id="colorName">...</span></h2>
+        <div style="font-size: 18px;">ATHEX: <span id="scoreVal">0</span> | Time: <span id="timer">30</span>s</div>
+        <div id="comboDisplay" style="color:#ffd700; font-size: 24px; font-weight: bold;"></div>
     </div>
 
     <div id="menu">
-        <h1 id="statusText">GAME OVER</h1>
-        <p id="finalScoreDisplay">Your Score: 0</p>
-        <div id="rewardSection">
-            Tokens Earned: <span class="reward-amt" id="athexEarned">0 ATHEX</span>
-        </div>
-        <button onclick="startGame()">TRY AGAIN</button>
+        <h1 id="statusText">ROUND ENDED</h1>
+        <p>Total Score: <span id="finalScore">0</span></p>
+        <div id="rewardSection">You earned:<br><span class="token-text" id="athexEarned">0 ATHEX</span></div>
+        <button onclick="startGame()">PLAY AGAIN</button>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -66,138 +37,106 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        let score, timeLeft, objects, combo, gameActive, speedMultiplier;
-        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f']; // Blue, Red, Green, Yellow
-        const colorNames = ['BLUE', 'RED', 'GREEN', 'YELLOW'];
+        let score, timeLeft, objects, combo, gameActive, speedMult;
+        const colors = ['#00d2ff', '#ff4b2b', '#00ff87', '#f9d423']; // Blue, Red, Green, Yellow
+        const names = ['BLUE', 'RED', 'GREEN', 'YELLOW'];
         let targetIdx = 0;
 
-        function drawLeaf(x, y, radius, color) {
+        // Draw a realistic Pointed Leaf
+        function drawLeaf(x, y, size, color) {
             ctx.save();
             ctx.translate(x, y);
             ctx.fillStyle = color;
             ctx.beginPath();
-            // Simple Leaf Shape Logic
-            ctx.moveTo(0, -radius);
-            ctx.quadraticCurveTo(radius, -radius, radius, 0);
-            ctx.quadraticCurveTo(radius, radius, 0, radius);
-            ctx.quadraticCurveTo(-radius, radius, -radius, 0);
-            ctx.quadraticCurveTo(-radius, -radius, 0, -radius);
+            ctx.moveTo(0, -size);
+            ctx.quadraticCurveTo(size, -size/2, 0, size); // Right side
+            ctx.quadraticCurveTo(-size, -size/2, 0, -size); // Left side
             ctx.fill();
-            // Leaf Stem
-            ctx.strokeStyle = "rgba(255,255,255,0.5)";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(0, -radius);
-            ctx.lineTo(0, radius);
+            ctx.strokeStyle = "rgba(0,0,0,0.2)";
+            ctx.lineWidth = 1;
             ctx.stroke();
             ctx.restore();
         }
 
         function startGame() {
-            score = 0; timeLeft = 15; objects = []; combo = 0; 
-            gameActive = true; speedMultiplier = 1;
+            score = 0; timeLeft = 30; objects = []; combo = 0; // Increased time to 30s
+            gameActive = true; speedMult = 1.2;
             targetIdx = Math.floor(Math.random() * colors.length);
-            
-            document.getElementById('colorName').innerText = colorNames[targetIdx];
+            document.getElementById('colorName').innerText = names[targetIdx];
             document.getElementById('colorName').style.color = colors[targetIdx];
             document.getElementById('menu').style.display = 'none';
-            
             update();
-            startTimer();
+            timerLoop();
         }
 
         function update() {
             if (!gameActive) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Dynamic Difficulty: Speed increases as time runs out
-            if (timeLeft < 10) speedMultiplier = 1.5;
-            if (timeLeft < 5) speedMultiplier = 2.2;
+            // Smoother speed ramping
+            speedMult = 1.2 + (30 - timeLeft) * 0.1;
 
             if (Math.random() < 0.04) {
-                objects.push({
-                    x: Math.random() * (canvas.width - 60) + 30,
-                    y: -30,
-                    colorIdx: Math.floor(Math.random() * colors.length),
-                    radius: 25,
-                    speed: (2 + Math.random() * 2) * speedMultiplier
-                });
+                let xPos = Math.random() * (canvas.width - 50) + 25;
+                // Avoid overlapping
+                if (objects.every(o => Math.abs(o.x - xPos) > 40)) {
+                    objects.push({ x: xPos, y: -50, colorIdx: Math.floor(Math.random()*4), speed: (2 + Math.random()*2) * speedMult });
+                }
             }
 
-            objects.forEach((obj, index) => {
+            objects.forEach((obj, i) => {
                 obj.y += obj.speed;
-                drawLeaf(obj.x, obj.y, obj.radius, colors[obj.colorIdx]);
+                drawLeaf(obj.x, obj.y, 25, colors[obj.colorIdx]);
 
-                if (obj.y > canvas.height + 40) {
-                    if (obj.colorIdx === targetIdx) {
-                        score = Math.max(0, score - 1); // Missed penalty
-                        combo = 0;
-                    }
-                    objects.splice(index, 1);
+                if (obj.y > canvas.height + 50) {
+                    if (obj.colorIdx === targetIdx) { score = Math.max(0, score - 1); combo = 0; }
+                    objects.splice(i, 1);
                 }
             });
 
             document.getElementById('scoreVal').innerText = score;
-            document.getElementById('comboDisplay').innerText = combo >= 5 ? `X${Math.floor(combo/5) + 1} COMBO!` : "";
+            document.getElementById('comboDisplay').innerText = combo >= 5 ? `X${Math.floor(combo/5)+1} COMBO!` : "";
             requestAnimationFrame(update);
         }
 
-        function handleInput(e) {
+        function handleTap(e) {
             if (!gameActive) return;
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            const y = e.touches ? e.touches[0].clientY : e.clientY;
 
-            objects.forEach((obj, index) => {
-                const dist = Math.hypot(clientX - obj.x, clientY - obj.y);
-                if (dist < obj.radius + 20) {
+            objects.forEach((obj, i) => {
+                if (Math.hypot(x - obj.x, y - obj.y) < 40) {
                     if (obj.colorIdx === targetIdx) {
                         combo++;
                         let mult = combo >= 10 ? 3 : (combo >= 5 ? 2 : 1);
                         score += (1 * mult);
                     } else {
-                        score = Math.max(0, score - 2); 
+                        score = Math.max(0, score - 2);
                         combo = 0;
                     }
-                    objects.splice(index, 1);
+                    objects.splice(i, 1);
                 }
             });
         }
 
-        canvas.addEventListener('touchstart', handleInput);
-        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', handleTap);
+        canvas.addEventListener('mousedown', handleTap);
 
-        function startTimer() {
-            const interval = setInterval(() => {
+        function timerLoop() {
+            const count = setInterval(() => {
                 timeLeft--;
                 document.getElementById('timer').innerText = timeLeft;
-                if (timeLeft <= 0) {
-                    clearInterval(interval);
-                    endGame();
-                }
+                if (timeLeft <= 0) { clearInterval(count); endGame(); }
             }, 1000);
         }
 
         function endGame() {
             gameActive = false;
             let reward = 0;
-            let status = "TRY AGAIN!";
+            if (score > 0) reward = 10; // Fixed: score > 0 now gives 10 tokens
             
-            // WIN/LOSS LOGIC
-            if (score >= 20) {
-                reward = 10;
-                status = "MISSION SUCCESS!";
-            } else if (score >= 10) {
-                reward = 5;
-                status = "NOT BAD!";
-            } else {
-                reward = 0;
-                status = "LEVEL FAILED!";
-            }
-
             document.getElementById('menu').style.display = 'block';
-            document.getElementById('statusText').innerText = status;
-            document.getElementById('statusText').style.color = reward > 0 ? "#00ffcc" : "#ff4444";
-            document.getElementById('finalScoreDisplay').innerText = "Final Score: " + score;
+            document.getElementById('finalScore').innerText = score;
             document.getElementById('athexEarned').innerText = reward + " ATHEX";
         }
 
